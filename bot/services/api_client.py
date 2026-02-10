@@ -1,0 +1,112 @@
+# bot/services/api_client.py
+import httpx
+from typing import Any, Dict
+
+from bot.config import API_BASE_URL
+
+
+async def generate_from_channel(
+    channel_username: str,
+    topic: str,
+    goal: str,
+    audience: str,
+) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/generate-from-channel"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            url,
+            json={
+                "channel_username": channel_username,
+                "topic": topic,
+                "goal": goal,
+                "audience": audience,
+                "max_chars": 1000,
+                "force_recreate_style": False,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def generate_plan(
+    style_name: str,
+    start_date: str,
+    goal: str,
+    audience: str,
+    posts_per_day: int = 1,
+) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/plan/generate"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            url,
+            json={
+                "style_name": style_name,
+                "start_date": start_date,
+                "goal": goal,
+                "audience": audience,
+                "posts_per_day": posts_per_day,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+async def generate_post_api(
+    style_name: str,
+    topic: str,
+    goal: str,
+    audience: str,
+    max_chars: int = 1200,
+) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/generate"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            url,
+            json={
+                "style_name": style_name,
+                "topic": topic,
+                "goal": goal,
+                "audience": audience,
+                "max_chars": max_chars,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+async def rename_style_api(old_name: str, new_name: str) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/styles/rename"
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            url,
+            json={"old_name": old_name, "new_name": new_name},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+async def get_user_api(telegram_id: int) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/user/{telegram_id}"
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def set_user_style_api(telegram_id: int, style_name: str) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/user/set-style"
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            url,
+            json={"telegram_id": telegram_id, "style_name": style_name},
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+async def confirm_plan_api(plan_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    plan_payload — это ровно то, что вернул /v1/plan/generate,
+    + добавим сюда user_telegram_id на стороне бота.
+    """
+    url = f"{API_BASE_URL}/v1/plan/confirm"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(url, json=plan_payload)
+        resp.raise_for_status()
+        return resp.json()
