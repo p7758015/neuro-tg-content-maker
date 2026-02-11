@@ -5,7 +5,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 from bot.services.state import get_user_style
-from bot.services.api_client import generate_post_api, get_user_api
+from bot.services.api_client import generate_post_api, get_user_api, autopost_next_api
 
 router = Router()
 
@@ -81,3 +81,16 @@ async def process_post_brief(message: types.Message, state: FSMContext):
 
     await state.clear()
 
+@router.message(Command("autopost_demo"))
+async def cmd_autopost_demo(message: types.Message):
+    try:
+        resp = await autopost_next_api(message.from_user.id)
+    except Exception as e:
+        await message.answer(f"Не удалось отправить пост по плану: {e}")
+        return
+
+    await message.answer(
+        "Отправил пост по текущему плану.\n"
+        f"plan_id: <code>{resp.get('plan_id')}</code>, "
+        f"item_id: <code>{resp.get('item_id')}</code>."
+    )

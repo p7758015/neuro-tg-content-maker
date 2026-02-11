@@ -110,3 +110,20 @@ async def confirm_plan_api(plan_payload: Dict[str, Any]) -> Dict[str, Any]:
         resp = await client.post(url, json=plan_payload)
         resp.raise_for_status()
         return resp.json()
+
+async def autopost_next_api(telegram_id: int) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/autopost/next/{telegram_id}"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(url)
+        resp.raise_for_status()
+        return resp.json()
+
+async def get_current_plan_api(telegram_id: int) -> Dict[str, Any]:
+    url = f"{API_BASE_URL}/v1/plan/current/{telegram_id}"
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(url)
+        # если 404 — плана нет, вернём None
+        if resp.status_code == 404:
+            return {}
+        resp.raise_for_status()
+        return resp.json()

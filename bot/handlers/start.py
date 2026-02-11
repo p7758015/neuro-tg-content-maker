@@ -1,6 +1,7 @@
 # bot/handlers/start.py
 from aiogram import Router, types
 from aiogram.filters import CommandStart, Command
+from bot.keyboards.main_menu import main_menu_keyboard
 
 router = Router()
 
@@ -25,4 +26,11 @@ async def cmd_help(message: types.Message):
         "/styles — посмотреть доступные стили\n"
         "/post — сгенерировать один пост\n"
         "/plan_week — предложить план на неделю\n"
+    )
+
+@router.message(Command("start"))
+async def cmd_start(message: types.Message):
+    await message.answer(
+        "Привет! Я помогу снять стиль с канала, генерировать посты и планы.",
+        reply_markup=main_menu_keyboard(),
     )
