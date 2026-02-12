@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+
 def after_connect_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -11,12 +12,13 @@ def after_connect_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="📝 Пост по стилу",
+                    text="📝 Пост по стилю",
                     callback_data="next_post",
                 ),
             ],
         ]
     )
+
 
 def after_style_capture_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -36,6 +38,7 @@ def after_style_capture_keyboard() -> InlineKeyboardMarkup:
         ]
     )
 
+
 def after_plan_accept_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -47,7 +50,7 @@ def after_plan_accept_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🚀 Отправить пост /autopost_demo",
+                    text="🚀 Протестировать автопостинг",
                     callback_data="next_autopost_demo",
                 ),
             ],
