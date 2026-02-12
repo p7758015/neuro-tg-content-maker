@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class PlanItem(BaseModel):
+    item_id: int
     day_index: int = Field(..., ge=0, le=6)
     date: str = Field(..., description="Дата дня в формате YYYY-MM-DD")
     time: str = Field(..., description="Время публикации HH:MM")

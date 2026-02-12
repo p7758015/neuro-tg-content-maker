@@ -3,17 +3,17 @@ from app.schemas.plan import PlanGenerateRequest, PlanGenerateResponse
 from app.services.plan_generator import generate_week_plan
 from fastapi import APIRouter, HTTPException
 from sqlmodel import select
+from pydantic import BaseModel, validator
+from datetime import datetime
+from typing import List
 from app.db.session import get_session
 from app.db.models import User, ContentPlan, PlanItem
 from app.schemas.plan_confirm import PlanConfirmRequest, PlanConfirmResponse
 from app.schemas.plan import PlanDetailResponse
 from app.schemas.user import UserResponse, SetStyleRequest, SetStyleResponse
-from datetime import datetime
 from app.services.telegram_sender import send_telegram_message
 from app.services.post_generator import generate_post
 from app.services.style_store import load_style
-
-
 from app.schemas.generate import (
     GenerateRequest,
     GenerateResponse,
@@ -40,6 +40,37 @@ from app.services.tg_loader import fetch_channel_posts
 from app.services.style_extractor import extract_style
 
 router = APIRouter(prefix="/v1", tags=["content"])
+
+class SetChannelRequest(BaseModel):
+    telegram_id: int
+    channel_username: str
+
+class PlanUpdateItem(BaseModel):
+    item_id: int
+    time: str  # формат HH:MM
+
+    @validator("time")
+    def validate_time(cls, v: str) -> str:
+        try:
+            datetime.strptime(v, "%H:%M")
+        except ValueError:
+            raise ValueError("time must be in format HH:MM")
+        return v
+
+class PlanUpdateTimesRequest(BaseModel):
+    plan_id: int
+    items: list[PlanUpdateItem]
+
+class SetChannelChatIdRequest(BaseModel):
+    telegram_id: int
+    channel_chat_id: int
+
+class LinkChannelRequest(BaseModel):
+    channel_username: str
+    channel_chat_id: int
+
+class AutopostUser(BaseModel):
+    telegram_id: int
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -246,6 +277,7 @@ async def get_current_plan(user_telegram_id: int) -> PlanDetailResponse:
 
         items_schema = [
             PlanItemSchema(
+                item_id=i.id,
                 day_index=i.day_index,
                 date=i.date,
                 time=i.time,
@@ -265,6 +297,42 @@ async def get_current_plan(user_telegram_id: int) -> PlanDetailResponse:
             audience=plan.audience,
             items=items_schema,
         )
+
+@router.post("/plan/update-times")
+async def update_plan_times(payload: PlanUpdateTimesRequest):
+    with get_session() as session:
+        plan = session.exec(
+            select(ContentPlan).where(ContentPlan.id == payload.plan_id)
+        ).first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="План не найден")
+
+        # Берём все items по plan_id и складываем в dict по id
+        items_map = {
+            i.id: i
+            for i in session.exec(
+                select(PlanItem).where(PlanItem.plan_id == plan.id)
+            ).all()
+        }
+
+        if not items_map:
+            raise HTTPException(status_code=404, detail="В плане нет пунктов")
+
+        # Обновляем только те, что пришли в запросе
+        for upd in payload.items:
+            item = items_map.get(upd.item_id)
+            if not item:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Пункт плана с id={upd.item_id} не найден в этом плане",
+                )
+            item.time = upd.time
+            session.add(item)
+
+        session.commit()
+
+        return {"status": "ok", "plan_id": plan.id, "updated": len(payload.items)}
+
 
 @router.get("/user/{telegram_id}", response_model=UserResponse)
 async def get_user(telegram_id: int) -> UserResponse:
@@ -305,12 +373,92 @@ async def set_user_style(payload: SetStyleRequest) -> SetStyleResponse:
             style_name=user.active_style_name,
         )
 
+
+@router.post("/user/set-channel", response_model=UserResponse)
+async def set_user_channel(payload: SetChannelRequest) -> UserResponse:
+    username = payload.channel_username.replace("https://t.me/", "").replace("@", "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Некорректный username канала")
+
+    with get_session() as session:
+        user = session.exec(
+            select(User).where(User.telegram_id == payload.telegram_id)
+        ).first()
+
+        if not user:
+            user = User(
+                telegram_id=payload.telegram_id,
+                channel_username=username,
+            )
+        else:
+            user.channel_username = username
+
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        return UserResponse(
+            telegram_id=user.telegram_id,
+            active_style_name=user.active_style_name,
+        )
+
+@router.post("/user/link-channel", response_model=UserResponse)
+async def link_channel(payload: LinkChannelRequest) -> UserResponse:
+    username = payload.channel_username.replace("@", "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Некорректный username канала")
+
+    with get_session() as session:
+        user = session.exec(
+            select(User).where(User.channel_username == username)
+        ).first()
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="Пользователь с таким каналом не найден. "
+                       "Сначала выполни /connect_channel в личке с ботом.",
+            )
+
+        user.channel_chat_id = payload.channel_chat_id
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        return UserResponse(
+            telegram_id=user.telegram_id,
+            active_style_name=user.active_style_name,
+        )
+
+
+@router.post("/user/set-channel-chat-id", response_model=UserResponse)
+async def set_user_channel_chat_id(payload: SetChannelChatIdRequest) -> UserResponse:
+    with get_session() as session:
+        user = session.exec(
+            select(User).where(User.telegram_id == payload.telegram_id)
+        ).first()
+
+        if not user:
+            # если по какой-то причине юзера ещё нет — создадим
+            user = User(
+                telegram_id=payload.telegram_id,
+                channel_chat_id=payload.channel_chat_id,
+            )
+        else:
+            user.channel_chat_id = payload.channel_chat_id
+
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+        return UserResponse(
+            telegram_id=user.telegram_id,
+            active_style_name=user.active_style_name,
+        )
+
+
 @router.post("/autopost/next/{telegram_id}")
 async def autopost_next(telegram_id: int):
-    """
-    Для демо: ищем ближайший запланированный пост для пользователя и отправляем его в Telegram.
-    Пока отправляем в личный чат с пользователем (telegram_id как chat_id).
-    """
     now = datetime.utcnow()
 
     with get_session() as session:
@@ -320,7 +468,6 @@ async def autopost_next(telegram_id: int):
         if not user:
             raise HTTPException(status_code=404, detail="Пользователь не найден")
 
-        # берём самый свежий план
         plan = session.exec(
             select(ContentPlan)
             .where(ContentPlan.user_id == user.id)
@@ -329,36 +476,35 @@ async def autopost_next(telegram_id: int):
         if not plan:
             raise HTTPException(status_code=404, detail="План для пользователя не найден")
 
-        items = session.exec(
+        item = session.exec(
             select(PlanItem)
             .where(PlanItem.plan_id == plan.id, PlanItem.status == "planned")
             .order_by(PlanItem.date, PlanItem.time)
-        ).all()
-
-        if not items:
+        ).first()
+        if not item:
             raise HTTPException(status_code=404, detail="Нет запланированных постов")
 
-        # для простоты берём самый ранний planned
-        item = items[0]
+        # Берём текст из generated_post или генерим, если ещё нет
+        if item.generated_post:
+            post_text = item.generated_post
+        else:
+            style = load_style(plan.style_name)
+            if not style:
+                raise HTTPException(status_code=500, detail="Стиль не найден на диске")
 
-        style = load_style(plan.style_name)
-        if not style:
-            raise HTTPException(status_code=500, detail="Стиль не найден на диске")
+            post_text = generate_post(
+                style=style,
+                topic=item.topic,
+                goal=plan.goal,
+                audience=plan.audience,
+            )
+            item.generated_post = post_text
 
-        # генерируем пост
-        post_text = generate_post(
-            style=style,
-            topic=item.topic,
-            goal=plan.goal,
-            audience=plan.audience,
-        )
+        target_chat_id = user.channel_chat_id or telegram_id
 
-        # отправляем в личку пользователю
-        await send_telegram_message(chat_id=telegram_id, text=post_text)
+        await send_telegram_message(chat_id=target_chat_id, text=post_text)
 
-        # обновляем статус
         item.status = "sent"
-        item.generated_post = post_text
         item.sent_at = datetime.utcnow()
         session.add(item)
         session.commit()
@@ -367,5 +513,66 @@ async def autopost_next(telegram_id: int):
             "status": "ok",
             "plan_id": plan.id,
             "item_id": item.id,
-            "sent_to": telegram_id,
+            "sent_to": target_chat_id,
         }
+
+
+@router.get("/autopost/preview/{telegram_id}")
+async def autopost_preview(telegram_id: int):
+    now = datetime.utcnow()
+
+    with get_session() as session:
+        user = session.exec(
+            select(User).where(User.telegram_id == telegram_id)
+        ).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+        plan = session.exec(
+            select(ContentPlan)
+            .where(ContentPlan.user_id == user.id)
+            .order_by(ContentPlan.created_at.desc())
+        ).first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="План для пользователя не найден")
+
+        item = session.exec(
+            select(PlanItem)
+            .where(PlanItem.plan_id == plan.id, PlanItem.status == "planned")
+            .order_by(PlanItem.date, PlanItem.time)
+        ).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Нет запланированных постов")
+
+        # если текст уже был сгенерен ранее — переиспользуем
+        if item.generated_post:
+            post_text = item.generated_post
+        else:
+            style = load_style(plan.style_name)
+            if not style:
+                raise HTTPException(status_code=500, detail="Стиль не найден на диске")
+
+            post_text = generate_post(
+                style=style,
+                topic=item.topic,
+                goal=plan.goal,
+                audience=plan.audience,
+            )
+            item.generated_post = post_text
+            session.add(item)
+            session.commit()
+
+        return {
+            "plan_id": plan.id,
+            "item_id": item.id,
+            "post_text": post_text,
+        }
+
+@router.get("/users/autopost-enabled", response_model=List[AutopostUser])
+async def get_autopost_enabled_users() -> list[AutopostUser]:
+    with get_session() as session:
+        users = session.exec(
+            select(User).where(User.autopost_enabled == True)  # noqa: E712
+        ).all()
+
+        return [AutopostUser(telegram_id=u.telegram_id) for u in users]

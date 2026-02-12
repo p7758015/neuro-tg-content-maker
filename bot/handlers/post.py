@@ -1,11 +1,12 @@
 # bot/handlers/post.py
-from aiogram import Router, types
+from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from bot.services.state import get_user_style
-from bot.services.api_client import generate_post_api, get_user_api, autopost_next_api
+from bot.services.api_client import generate_post_api, get_user_api, autopost_next_api, autopost_preview_api
 
 router = Router()
 
@@ -82,15 +83,67 @@ async def process_post_brief(message: types.Message, state: FSMContext):
     await state.clear()
 
 @router.message(Command("autopost_demo"))
-async def cmd_autopost_demo(message: types.Message):
+async def cmd_autopost_demo(message: types.Message, state: FSMContext):
     try:
-        resp = await autopost_next_api(message.from_user.id)
+        preview = await autopost_preview_api(message.from_user.id)
     except Exception as e:
-        await message.answer(f"Не удалось отправить пост по плану: {e}")
+        await message.answer(f"Не удалось получить пост по плану: {e}")
         return
 
+    post_text = preview["post_text"]
+    plan_id = preview["plan_id"]
+    item_id = preview["item_id"]
+
+    await state.update_data(
+        autopost_preview_plan_id=plan_id,
+        autopost_preview_item_id=item_id,
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Отправить сейчас по плану",
+                    callback_data="autopost_send_now",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Не отправлять",
+                    callback_data="autopost_cancel",
+                )
+            ],
+        ]
+    )
+
     await message.answer(
-        "Отправил пост по текущему плану.\n"
+        "<b>Ближайший пост по плану (превью):</b>\n\n" + post_text,
+        reply_markup=kb,
+    )
+
+@router.callback_query(F.data == "autopost_send_now")
+async def autopost_send_now(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer("Отправляю пост по плану…")
+
+    try:
+        resp = await autopost_next_api(callback.from_user.id)
+    except Exception as e:
+        await callback.message.answer(f"Не удалось отправить пост: {e}")
+        await callback.answer()
+        return
+
+    await callback.message.answer(
+        "Пост отправлен.\n"
         f"plan_id: <code>{resp.get('plan_id')}</code>, "
         f"item_id: <code>{resp.get('item_id')}</code>."
     )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "autopost_cancel")
+async def autopost_cancel(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer("Ок, этот пост не отправляю.")
+    await state.clear()
+    await callback.answer()

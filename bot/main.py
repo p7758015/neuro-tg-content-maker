@@ -1,4 +1,3 @@
-# bot/main.py
 import asyncio
 
 from aiogram import Bot, Dispatcher
@@ -12,6 +11,7 @@ from bot.handlers import connect as connect_handlers
 from bot.handlers import post as post_handlers
 from bot.handlers import plan as plan_handlers
 from bot.handlers import flow as flow_handlers
+from bot.handlers import channel as channel_handlers  # новый импорт
 
 
 async def set_bot_commands(bot: Bot):
@@ -38,6 +38,7 @@ async def main():
     dp.include_router(post_handlers.router)
     dp.include_router(plan_handlers.router)
     dp.include_router(flow_handlers.router)
+    dp.include_router(channel_handlers.router)  # подключаем роутер каналов
 
     await set_bot_commands(bot)
 
@@ -47,6 +48,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
 

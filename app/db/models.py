@@ -1,4 +1,3 @@
-# app/db/models.py
 from typing import Optional, List
 from datetime import datetime
 
@@ -9,6 +8,9 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     telegram_id: int = Field(index=True, unique=True)
     active_style_name: Optional[str] = Field(default=None)
+    channel_username: Optional[str] = Field(default=None)  # @username без @
+    channel_chat_id: Optional[int] = Field(default=None)   # числовой chat_id канала
+    autopost_enabled: bool = Field(default=False)          # включён ли автопостинг для пользователя
 
     plans: List["ContentPlan"] = Relationship(back_populates="user")
 
