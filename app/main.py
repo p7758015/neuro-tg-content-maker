@@ -10,7 +10,10 @@ app = FastAPI(
 )
 
 init_db()
-app.include_router(api_v1_router)
+
+# добавляем префикс /v1
+app.include_router(api_v1_router, prefix="/v1")
+
 
 @app.get("/")
 async def root():

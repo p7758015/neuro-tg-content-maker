@@ -1,4 +1,3 @@
-# bot/services/api_client.py
 import httpx
 from typing import Any, Dict
 
@@ -50,6 +49,7 @@ async def generate_plan(
         resp.raise_for_status()
         return resp.json()
 
+
 async def generate_post_api(
     style_name: str,
     topic: str,
@@ -72,6 +72,7 @@ async def generate_post_api(
         resp.raise_for_status()
         return resp.json()
 
+
 async def rename_style_api(old_name: str, new_name: str) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/v1/styles/rename"
     async with httpx.AsyncClient(timeout=30) as client:
@@ -81,6 +82,7 @@ async def rename_style_api(old_name: str, new_name: str) -> Dict[str, Any]:
         )
         resp.raise_for_status()
         return resp.json()
+
 
 async def get_user_api(telegram_id: int) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/v1/user/{telegram_id}"
@@ -100,6 +102,7 @@ async def set_user_style_api(telegram_id: int, style_name: str) -> Dict[str, Any
         resp.raise_for_status()
         return resp.json()
 
+
 async def confirm_plan_api(plan_payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     plan_payload — это ровно то, что вернул /v1/plan/generate,
@@ -111,6 +114,7 @@ async def confirm_plan_api(plan_payload: Dict[str, Any]) -> Dict[str, Any]:
         resp.raise_for_status()
         return resp.json()
 
+
 async def autopost_next_api(telegram_id: int) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/v1/autopost/next/{telegram_id}"
     async with httpx.AsyncClient(timeout=60) as client:
@@ -118,15 +122,17 @@ async def autopost_next_api(telegram_id: int) -> Dict[str, Any]:
         resp.raise_for_status()
         return resp.json()
 
+
 async def get_current_plan_api(telegram_id: int) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/v1/plan/current/{telegram_id}"
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(url)
-        # если 404 — плана нет, вернём None
+        # если 404 — плана нет, вернём {}
         if resp.status_code == 404:
             return {}
         resp.raise_for_status()
         return resp.json()
+
 
 async def set_user_channel_api(telegram_id: int, channel_username: str) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/v1/user/set-channel"
@@ -137,6 +143,7 @@ async def set_user_channel_api(telegram_id: int, channel_username: str) -> Dict[
         )
         resp.raise_for_status()
         return resp.json()
+
 
 async def update_plan_times_api(plan_id: int, items: list[dict]) -> Dict[str, Any]:
     """
@@ -151,12 +158,14 @@ async def update_plan_times_api(plan_id: int, items: list[dict]) -> Dict[str, An
         resp.raise_for_status()
         return resp.json()
 
+
 async def autopost_preview_api(telegram_id: int) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/v1/autopost/preview/{telegram_id}"
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(url)
         resp.raise_for_status()
         return resp.json()
+
 
 async def set_channel_chat_id_api(telegram_id: int, channel_chat_id: int) -> Dict[str, Any]:
     url = f"{API_BASE_URL}/v1/user/set-channel-chat-id"
@@ -168,16 +177,17 @@ async def set_channel_chat_id_api(telegram_id: int, channel_chat_id: int) -> Dic
         resp.raise_for_status()
         return resp.json()
 
-async def set_channel_chat_id_api_for_username(
-    channel_username: str,
-    channel_chat_id: int,
-) -> Dict[str, Any]:
+
+async def link_channel_api(telegram_id: int, channel_chat_id: int) -> Dict[str, Any]:
+    """
+    Привязка канала автопостинга к пользователю по его telegram_id.
+    """
     url = f"{API_BASE_URL}/v1/user/link-channel"
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
             url,
             json={
-                "channel_username": channel_username,
+                "telegram_id": telegram_id,
                 "channel_chat_id": channel_chat_id,
             },
         )

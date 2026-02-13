@@ -11,6 +11,7 @@ from bot.services.api_client import (
     set_user_style_api,
     set_user_channel_api,
 )
+from bot.services.state import set_last_connect_user  # ← добавили
 from bot.keyboards.flow import (
     after_connect_keyboard,
     after_style_capture_keyboard,
@@ -124,6 +125,9 @@ async def style_name_keep(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer()
         return
 
+    # фиксируем, что этот пользователь последний прошёл connect_channel
+    set_last_connect_user(callback.from_user.id)
+
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
         f"Ок, стиль закреплён как <b>{style_name}</b>.\n\n"
@@ -179,6 +183,9 @@ async def process_custom_style_name(message: types.Message, state: FSMContext):
         )
         await state.clear()
         return
+
+    # фиксируем, что этот пользователь последний прошёл connect_channel
+    set_last_connect_user(message.from_user.id)
 
     await message.answer(
         f"Готово! Стиль переименован и теперь называется <b>{new_name}</b>.\n\n"

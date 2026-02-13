@@ -5,8 +5,12 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from bot.services.state import get_user_style
-from bot.services.api_client import generate_post_api, get_user_api, autopost_next_api, autopost_preview_api
+from bot.services.api_client import (
+    generate_post_api,
+    get_user_api,
+    autopost_next_api,
+    autopost_preview_api,
+)
 
 router = Router()
 
@@ -82,8 +86,45 @@ async def process_post_brief(message: types.Message, state: FSMContext):
 
     await state.clear()
 
+
 @router.message(Command("autopost_demo"))
 async def cmd_autopost_demo(message: types.Message, state: FSMContext):
+    # 1. Проверяем, привязан ли канал
+    try:
+        user_data = await get_user_api(message.from_user.id)
+    except Exception as e:
+        await message.answer(f"Не удалось получить данные пользователя: {e}")
+        return
+
+    channel_chat_id = user_data.get("channel_chat_id")
+    channel_username = user_data.get("channel_username")
+
+    if not channel_chat_id:
+        # Канал не привязан — даём понятную инструкцию и выходим
+        text = (
+            "Канал для автопостинга пока не подключён.\n\n"
+            "Чтобы я мог отправлять посты по плану в канал, сделай три шага:\n"
+            "1️⃣ В личке со мной выполни /connect_channel и укажи ссылку или @username канала.\n"
+            "2️⃣ Добавь этого бота администратором в этот канал.\n"
+            "3️⃣ В самом канале отправь команду /link_channel.\n\n"
+        )
+        if channel_username:
+            text += (
+                f"Сейчас у тебя сохранён канал @{channel_username}. "
+                "Если всё верно — просто добавь меня админом и отправь /link_channel в этом канале.\n\n"
+                "После этого вернись к команде /autopost_demo — я покажу ближайший пост по плану "
+                "и уже смогу отправить его в канал."
+            )
+        else:
+            text += (
+                "После этого вернись к /autopost_demo — я покажу ближайший пост по плану "
+                "и буду отправлять его в подключённый канал."
+            )
+
+        await message.answer(text)
+        return
+
+    # 2. Канал привязан — показываем превью ближайшего поста
     try:
         preview = await autopost_preview_api(message.from_user.id)
     except Exception as e:
@@ -120,6 +161,7 @@ async def cmd_autopost_demo(message: types.Message, state: FSMContext):
         "<b>Ближайший пост по плану (превью):</b>\n\n" + post_text,
         reply_markup=kb,
     )
+
 
 @router.callback_query(F.data == "autopost_send_now")
 async def autopost_send_now(callback: types.CallbackQuery, state: FSMContext):
