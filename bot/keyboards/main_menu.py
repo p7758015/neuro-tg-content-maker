@@ -1,22 +1,20 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-
-def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [
-                KeyboardButton(text="/connect_channel"),
-                KeyboardButton(text="/post"),
-            ],
-            [
-                KeyboardButton(text="/plan_week"),
-                KeyboardButton(text="/plan_status"),
-            ],
-            [
-                KeyboardButton(text="/plan_edit_time"),
-                KeyboardButton(text="/autopost_demo"),
-            ],
+mainmenu_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [
+            KeyboardButton(text="🔗 Подключить канал"),
+            KeyboardButton(text="✏️ Пост по плану"),
         ],
-        resize_keyboard=True,
-        input_field_placeholder="Выбери команду из меню",
-    )
+        [
+            KeyboardButton(text="📅 План на неделю"),
+            KeyboardButton(text="✅ Статус плана"),
+        ],
+        [
+            KeyboardButton(text="⏰ Изменить время постов"),
+            KeyboardButton(text="🚀 Тест автопостинга"),
+        ],
+    ],
+    resize_keyboard=True,
+    input_field_placeholder="Выбери действие…",
+)

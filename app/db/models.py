@@ -1,3 +1,4 @@
+# app/db/models.py
 from typing import Optional, List
 from datetime import datetime
 
@@ -10,7 +11,7 @@ class User(SQLModel, table=True):
     active_style_name: Optional[str] = Field(default=None)
     channel_username: Optional[str] = Field(default=None)  # @username без @
     channel_chat_id: Optional[int] = Field(default=None)   # числовой chat_id канала
-    autopost_enabled: bool = Field(default=False)          # включён ли автопостинг для пользователя
+    autopost_enabled: bool = Field(default=True)           # автопостинг включён по умолчанию
 
     plans: List["ContentPlan"] = Relationship(back_populates="user")
 
@@ -32,13 +33,16 @@ class PlanItem(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     plan_id: int = Field(foreign_key="contentplan.id")
     day_index: int
-    date: str
-    time: str
+    date: str                      # YYYY-MM-DD
+    time: str                      # HH:MM
     post_type: str
     topic: str
     notes: str = ""
     status: str = Field(default="planned")  # planned / generated / sent
     generated_post: Optional[str] = None
     sent_at: Optional[datetime] = None
+
+    # новое поле — по нему будем сравнивать с текущим временем
+    scheduled_at: Optional[datetime] = Field(default=None)
 
     plan: ContentPlan = Relationship(back_populates="items")

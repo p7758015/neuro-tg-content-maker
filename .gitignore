@@ -31,7 +31,7 @@ dist/
 *.ipynb
 
 # SQLite базы, если не хочешь хранить в репо
-neuro_content.db
+neurocontent.db
 neuro_tg_session.*
 
 # Прочее

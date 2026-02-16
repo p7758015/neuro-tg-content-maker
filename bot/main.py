@@ -11,17 +11,18 @@ from bot.handlers import connect as connect_handlers
 from bot.handlers import post as post_handlers
 from bot.handlers import plan as plan_handlers
 from bot.handlers import flow as flow_handlers
-from bot.handlers import channel as channel_handlers  # новый импорт
+from bot.handlers import channel as channel_handlers
 
 
 async def set_bot_commands(bot: Bot):
     commands = [
-        BotCommand(command="start", description="Запустить бота"),
-        BotCommand(command="connect_channel", description="Снять стиль с канала"),
-        BotCommand(command="post", description="Сгенерировать одиночный пост"),
-        BotCommand(command="plan_week", description="Сделать план на неделю"),
-        BotCommand(command="plan_status", description="Показать сохранённый план"),
-        BotCommand(command="autopost_demo", description="Отправить пост по плану"),
+        BotCommand(command="start", description="Запуск и инструкция"),
+        BotCommand(command="connect_channel", description="Подключить канал и снять стиль"),
+        BotCommand(command="post", description="Показать следующий пост по плану в личке"),
+        BotCommand(command="plan_week", description="Сделать план постов на неделю"),
+        BotCommand(command="plan_status", description="Показать текущий план"),
+        BotCommand(command="plan_edit_time", description="Изменить время постов в плане"),
+        BotCommand(command="autopost_demo", description="Тестовый автопост ближайшего поста в канал"),
     ]
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())
 
@@ -38,7 +39,7 @@ async def main():
     dp.include_router(post_handlers.router)
     dp.include_router(plan_handlers.router)
     dp.include_router(flow_handlers.router)
-    dp.include_router(channel_handlers.router)  # подключаем роутер каналов
+    dp.include_router(channel_handlers.router)
 
     await set_bot_commands(bot)
 
@@ -48,8 +49,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-

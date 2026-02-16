@@ -1,4 +1,3 @@
-# bot/handlers/connect.py
 from aiogram import Router, types, F
 from aiogram.filters import Command
 from aiogram.fsm.state import State, StatesGroup
@@ -11,12 +10,9 @@ from bot.services.api_client import (
     set_user_style_api,
     set_user_channel_api,
 )
-from bot.services.state import set_last_connect_user  # ← добавили
-from bot.keyboards.flow import (
-    after_connect_keyboard,
-    after_style_capture_keyboard,
-)
-from bot.keyboards.main_menu import main_menu_keyboard
+from bot.services.state import set_last_connect_user
+from bot.keyboards.flow import after_connect_keyboard, after_style_capture_keyboard
+from bot.keyboards.main_menu import mainmenu_keyboard
 
 router = Router()
 
@@ -28,15 +24,13 @@ class ConnectStates(StatesGroup):
 
 
 @router.message(Command("connect_channel"))
+@router.message(F.text == "🔗 Подключить канал")
 async def cmd_connect_channel(message: types.Message, state: FSMContext):
     await message.answer(
-        "Пришли ссылку или @username канала, с которого нужно снять стиль.\n\n"
-        "Например:\n"
-        "https://t.me/your_channel\n"
-        "или @your_channel"
+        "Отправь username канала или ссылку на него.\n\n"
+        "Например: https://t.me/yourchannel или @yourchannel"
     )
     await state.set_state(ConnectStates.waiting_for_channel)
-    # здесь пока НЕ показываем «канал подключён», он ещё не обработан
 
 
 @router.message(ConnectStates.waiting_for_channel)
@@ -49,99 +43,102 @@ async def process_channel_username(message: types.Message, state: FSMContext):
         .strip()
     )
     if not username:
-        await message.answer("Не смог прочитать username. Пришли, пожалуйста, ещё раз.")
+        await message.answer(
+            "Не удалось распознать username канала.\n"
+            "Пришли, пожалуйста, ссылку вида https://t.me/yourchannel или @yourchannel."
+        )
         return
 
-    await message.answer("Секунду, снимаю стиль с канала…")
+    await message.answer("Снимаю стиль с канала, подожди немного…")
 
     try:
-        # временный бриф, чтобы получить стиль + пример поста
         resp = await generate_from_channel(
             channel_username=username,
-            topic="Тестовый пост в стиле автора",
-            goal="проверить стиль для нейро-контентмейкера",
-            audience="подписчики этого канала",
+            topic="",
+            goal="-",
+            audience="-",
         )
     except Exception as e:
-        await message.answer(f"Не получилось снять стиль: {e}")
+        await message.answer(f"❌ Ошибка при снятии стиля: {e}")
         await state.clear()
         return
 
     style_name = resp["style_name"]
 
-    # Сохраняем username канала за пользователем (без chat_id пока)
+    # Сохраняем канал за пользователем в бэкенде
     try:
         await set_user_channel_api(message.from_user.id, username)
     except Exception:
-        # не ломаем сценарий, если не удалось сохранить канал
-        pass
+        # если тут ошибка, просто уведомим, но не падаем
+        await message.answer(
+            "Стиль снят, но не удалось сохранить канал в профиле. "
+            "Попробуй позже ещё раз /connect_channel."
+        )
 
-    await state.update_data(
-        channel_username=username,
-        suggested_style_name=style_name,
-    )
+    await state.update_data(suggested_style_name=style_name, channel_username=username)
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"Оставить имя: {style_name}",
-                    callback_data="style_name_keep",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="Ввести своё имя",
-                    callback_data="style_name_custom",
-                )
-            ],
-        ]
-    )
-
+    # Предлагаем имя стиля, связанное с тематикой канала
     await message.answer(
-        f"Снял стиль с канала @{username}.\n\n"
-        f"Предлагаю название стиля: <b>{style_name}</b>.\n"
-        "Оставить так или ввести своё?",
-        reply_markup=kb,
+        f"Я снял стиль с канала @{username}.\n\n"
+        f"Предлагаю назвать этот стиль так: <b>{style_name}</b>.\n\n"
+        "Если тебя устраивает такое название — нажми кнопку ниже.\n"
+        "Если хочешь другое, введи своё название (например, «инфобизнес», «фитнес», «крипта»).",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="Оставить это название",
+                        callback_data="style_name_ok",
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="Задать своё название",
+                        callback_data="style_name_custom",
+                    )
+                ],
+            ]
+        ),
     )
     await state.set_state(ConnectStates.waiting_for_style_name_decision)
 
 
 @router.callback_query(
     ConnectStates.waiting_for_style_name_decision,
-    F.data == "style_name_keep",
+    F.data == "style_name_ok",
 )
-async def style_name_keep(callback: types.CallbackQuery, state: FSMContext):
+async def style_name_ok_callback(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_reply_markup(reply_markup=None)
     data = await state.get_data()
-    style_name = data["suggested_style_name"]
+    style_name = data.get("suggested_style_name")
 
-    try:
-        await set_user_style_api(callback.from_user.id, style_name)
-    except Exception as e:
-        await callback.message.answer(
-            f"Не удалось сохранить стиль для пользователя: {e}"
-        )
-        await state.clear()
-        await callback.answer()
-        return
+    if style_name:
+        try:
+            await set_user_style_api(callback.from_user.id, style_name)
+        except Exception:
+            await callback.message.answer(
+                "Не удалось сохранить стиль за пользователем, но стиль уже создан."
+            )
 
-    # фиксируем, что этот пользователь последний прошёл connect_channel
     set_last_connect_user(callback.from_user.id)
 
-    await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        f"Ок, стиль закреплён как <b>{style_name}</b>.\n\n"
-        "Дальше сделай два шага, чтобы я мог постить в канал:\n"
-        "1️⃣ Добавь этого бота администратором в свой канал.\n"
-        "2️⃣ В самом канале отправь команду /link_channel.\n\n"
-        "После этого можно генерировать посты (/post) и планы (/plan_week).",
-        reply_markup=main_menu_keyboard(),
-    )
-    await callback.message.answer(
-        "Что делаем дальше?",
-        reply_markup=after_style_capture_keyboard(),
+        f"Стиль <b>{style_name}</b> сохранён и привязан к тебе. ✅\n\n"
+        "Что важно сделать, чтобы автопостинг работал:\n"
+        "1️⃣ Добавь этого бота в администраторы канала с правом публиковать посты.\n"
+        "2️⃣ В самом канале один раз отправь сообщение: /link_channel — бот запомнит этот канал.\n"
+        "3️⃣ В личке с ботом создай и одобри контент-план через /plan_week.\n\n"
+        "После этого посты будут автоматически выходить в канал по расписанию.\n\n"
+        "Для теста можно использовать:\n"
+        "• /post — посмотреть ближайший пост по плану в личке;\n"
+        "• /autopost_demo — отправить ближайший пост в канал и отметить его как отправленный.",
+        reply_markup=mainmenu_keyboard,
     )
 
+    await callback.message.answer(
+        "Что дальше хочешь сделать?",
+        reply_markup=after_style_capture_keyboard(),
+    )
     await state.clear()
     await callback.answer()
 
@@ -150,11 +147,11 @@ async def style_name_keep(callback: types.CallbackQuery, state: FSMContext):
     ConnectStates.waiting_for_style_name_decision,
     F.data == "style_name_custom",
 )
-async def style_name_custom(callback: types.CallbackQuery, state: FSMContext):
+async def style_name_custom_callback(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        "Введи, пожалуйста, своё название для этого стиля.\n"
-        "Например: edler_autoML или cherkashov_main."
+        "Введи своё название стиля.\n"
+        "Например: «инфобизнес», «фитнес», «крипта», «личный блог»."
     )
     await state.set_state(ConnectStates.waiting_for_custom_style_name)
     await callback.answer()
@@ -164,40 +161,40 @@ async def style_name_custom(callback: types.CallbackQuery, state: FSMContext):
 async def process_custom_style_name(message: types.Message, state: FSMContext):
     new_name = (message.text or "").strip()
     if not new_name:
-        await message.answer("Имя стиля не должно быть пустым. Попробуй ещё раз.")
+        await message.answer("Название не может быть пустым. Попробуй ещё раз.")
         return
 
     data = await state.get_data()
-    suggested_name = data["suggested_style_name"]
+    suggested_name = data.get("suggested_style_name")
 
-    await message.answer("Переименовываю стиль на стороне сервиса…")
+    await message.answer("Переименовываю стиль, подожди секунду…")
 
     try:
-        await rename_style_api(suggested_name, new_name)
+        if suggested_name and suggested_name != new_name:
+            await rename_style_api(suggested_name, new_name)
         await set_user_style_api(message.from_user.id, new_name)
     except Exception as e:
-        await message.answer(
-            "Не удалось полностью оформить стиль.\n"
-            f"Подробнее: {e}\n\n"
-            f"Попробуй ещё раз или используй имя: <b>{suggested_name}</b>."
-        )
+        await message.answer(f"Не удалось переименовать или сохранить стиль: {e}")
         await state.clear()
         return
 
-    # фиксируем, что этот пользователь последний прошёл connect_channel
     set_last_connect_user(message.from_user.id)
 
     await message.answer(
-        f"Готово! Стиль переименован и теперь называется <b>{new_name}</b>.\n\n"
-        "Дальше сделай два шага, чтобы я мог постить в канал:\n"
-        "1️⃣ Добавь этого бота администратором в свой канал.\n"
-        "2️⃣ В самом канале отправь команду /link_channel.\n\n"
-        "После этого можешь генерировать посты (/post) и планы (/plan_week).",
-        reply_markup=main_menu_keyboard(),
-    )
-    await message.answer(
-        "Что делаем дальше?",
-        reply_markup=after_style_capture_keyboard(),
+        f"Стиль <b>{new_name}</b> сохранён и привязан к тебе. ✅\n\n"
+        "Что важно сделать, чтобы автопостинг работал:\n"
+        "1️⃣ Добавь этого бота в администраторы канала с правом публиковать посты.\n"
+        "2️⃣ В самом канале один раз отправь сообщение: /link_channel — бот запомнит этот канал.\n"
+        "3️⃣ В личке с ботом создай и одобри контент-план через /plan_week.\n\n"
+        "После этого посты будут автоматически выходить в канал по расписанию.\n\n"
+        "Для теста можно использовать:\n"
+        "• /post — посмотреть ближайший пост по плану в личке;\n"
+        "• /autopost_demo — отправить ближайший пост в канал и отметить его как отправленный.",
+        reply_markup=mainmenu_keyboard,
     )
 
+    await message.answer(
+        "Что дальше хочешь сделать?",
+        reply_markup=after_style_capture_keyboard(),
+    )
     await state.clear()

@@ -1,7 +1,7 @@
 # app/db/session.py
 from sqlmodel import create_engine, Session, SQLModel
 
-sqlite_file_name = "neuro_content.db"
+sqlite_file_name = "neurocontent.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
 
 connect_args = {"check_same_thread": False}

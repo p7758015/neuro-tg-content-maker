@@ -2,57 +2,66 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def after_connect_keyboard() -> InlineKeyboardMarkup:
+    # после подключения канала и снятия стиля
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🎨 Снять стиль с канала",
-                    callback_data="next_style_capture",
-                ),
+                    text="Сделать план на неделю",
+                    callback_data="next_planweek",
+                )
             ],
             [
                 InlineKeyboardButton(
-                    text="📝 Пост по стилю",
+                    text="Посмотреть пост по плану",
                     callback_data="next_post",
-                ),
+                )
             ],
         ]
     )
 
 
 def after_style_capture_keyboard() -> InlineKeyboardMarkup:
+    # после того как предложено название стиля / переименовано
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📝 Сгенерировать пост",
+                    text="Посмотреть пост по плану",
                     callback_data="next_post",
-                ),
+                )
             ],
             [
                 InlineKeyboardButton(
-                    text="📅 План на неделю",
-                    callback_data="next_plan_week",
-                ),
+                    text="Сделать план на неделю",
+                    callback_data="next_planweek",
+                )
             ],
         ]
     )
 
 
 def after_plan_accept_keyboard() -> InlineKeyboardMarkup:
+    # после одобрения плана
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="👀 Посмотреть план",
-                    callback_data="next_plan_status",
-                ),
+                    text="Посмотреть ближайший пост",
+                    callback_data="next_post",
+                )
             ],
             [
                 InlineKeyboardButton(
-                    text="🚀 Протестировать автопостинг",
-                    callback_data="next_autopost_demo",
-                ),
+                    text="Изменить время постов",
+                    callback_data="next_plan_edit_time",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Посмотреть статус плана",
+                    callback_data="next_planstatus",
+                )
             ],
         ]
     )

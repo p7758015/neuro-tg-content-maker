@@ -218,12 +218,14 @@ async def confirm_plan(payload: PlanConfirmRequest) -> PlanConfirmResponse:
             user = User(
                 telegram_id=payload.user_telegram_id,
                 active_style_name=payload.style_name,
+                autopost_enabled=True,  # включаем автопостинг при первом плане
             )
             session.add(user)
             session.commit()
             session.refresh(user)
         else:
             user.active_style_name = payload.style_name
+            user.autopost_enabled = True  # гарантируем включение при новом плане
             session.add(user)
             session.commit()
             session.refresh(user)
@@ -241,6 +243,11 @@ async def confirm_plan(payload: PlanConfirmRequest) -> PlanConfirmResponse:
 
         items_models = []
         for item in payload.items:
+            # собираем datetime для расписания
+            scheduled_at = datetime.strptime(
+                f"{item.date} {item.time}", "%Y-%m-%d %H:%M"
+            )
+
             items_models.append(
                 PlanItem(
                     plan_id=plan.id,
@@ -250,6 +257,7 @@ async def confirm_plan(payload: PlanConfirmRequest) -> PlanConfirmResponse:
                     post_type=item.post_type,
                     topic=item.topic,
                     notes=item.notes or "",
+                    scheduled_at=scheduled_at,
                 )
             )
         session.add_all(items_models)
@@ -339,6 +347,10 @@ async def update_plan_times(payload: PlanUpdateTimesRequest):
                     detail=f"Пункт плана с id={upd.item_id} не найден в этом плане",
                 )
             item.time = upd.time
+            # обновляем и datetime для расписания
+            item.scheduled_at = datetime.strptime(
+                f"{item.date} {item.time}", "%Y-%m-%d %H:%M"
+            )
             session.add(item)
 
         session.commit()
@@ -488,7 +500,7 @@ async def set_user_channel_chat_id(
 
 @router.post("/autopost/next/{telegram_id}")
 async def autopost_next(telegram_id: int):
-    now = datetime.utcnow()
+    now = datetime.now()
 
     with get_session() as session:
         user = session.exec(
@@ -507,14 +519,19 @@ async def autopost_next(telegram_id: int):
                 status_code=404, detail="План для пользователя не найден"
             )
 
+        # берём только те посты, время которых уже наступило
         item = session.exec(
             select(PlanItem)
-            .where(PlanItem.plan_id == plan.id, PlanItem.status == "planned")
-            .order_by(PlanItem.date, PlanItem.time)
+            .where(
+                PlanItem.plan_id == plan.id,
+                PlanItem.status == "planned",
+                PlanItem.scheduled_at <= now,
+            )
+            .order_by(PlanItem.scheduled_at)
         ).first()
         if not item:
             raise HTTPException(
-                status_code=404, detail="Нет запланированных постов"
+                status_code=404, detail="Нет запланированных постов к отправке"
             )
 
         if item.generated_post:
@@ -553,7 +570,7 @@ async def autopost_next(telegram_id: int):
 
 @router.get("/autopost/preview/{telegram_id}")
 async def autopost_preview(telegram_id: int):
-    now = datetime.utcnow()
+    now = datetime.now()
 
     with get_session() as session:
         user = session.exec(
@@ -574,12 +591,16 @@ async def autopost_preview(telegram_id: int):
 
         item = session.exec(
             select(PlanItem)
-            .where(PlanItem.plan_id == plan.id, PlanItem.status == "planned")
-            .order_by(PlanItem.date, PlanItem.time)
+            .where(
+                PlanItem.plan_id == plan.id,
+                PlanItem.status == "planned",
+                PlanItem.scheduled_at <= now,
+            )
+            .order_by(PlanItem.scheduled_at)
         ).first()
         if not item:
             raise HTTPException(
-                status_code=404, detail="Нет запланированных постов"
+                status_code=404, detail="Нет запланированных постов к показу"
             )
 
         if item.generated_post:
