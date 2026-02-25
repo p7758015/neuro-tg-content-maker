@@ -570,8 +570,7 @@ async def autopost_next(telegram_id: int):
 
 @router.get("/autopost/preview/{telegram_id}")
 async def autopost_preview(telegram_id: int):
-    now = datetime.now()
-
+    # now = datetime.now()  # тут теперь не нужен
     with get_session() as session:
         user = session.exec(
             select(User).where(User.telegram_id == telegram_id)
@@ -589,14 +588,14 @@ async def autopost_preview(telegram_id: int):
                 status_code=404, detail="План для пользователя не найден"
             )
 
+        # Берём просто ближайший planned-пост независимо от времени
         item = session.exec(
             select(PlanItem)
             .where(
                 PlanItem.plan_id == plan.id,
                 PlanItem.status == "planned",
-                PlanItem.scheduled_at <= now,
             )
-            .order_by(PlanItem.scheduled_at)
+            .order_by(PlanItem.scheduled_at)  # или (PlanItem.date, PlanItem.time)
         ).first()
         if not item:
             raise HTTPException(
@@ -627,6 +626,7 @@ async def autopost_preview(telegram_id: int):
             "item_id": item.id,
             "post_text": post_text,
         }
+
 
 
 @router.get("/users/autopost-enabled", response_model=List[AutopostUser])
