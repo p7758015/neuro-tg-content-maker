@@ -57,6 +57,7 @@ AI-сервис автоматизирует полный цикл работы 
 
 ## Architecture
 
+---
 Telegram User → Bot (aiogram) → FastAPI backend → LLM (OpenAI)
 ↓
 SQLite (планы, пользователи)
