@@ -57,13 +57,13 @@ AI-сервис автоматизирует полный цикл работы 
 
 ## Architecture
 
----
+```bash
 Telegram User → Bot (aiogram) → FastAPI backend → LLM (OpenAI)
 ↓
 SQLite (планы, пользователи)
 ↓
 Telegram Bot API (отправка постов)
-
+```
 ---
 
 ## Бизнес-ценность
